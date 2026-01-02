@@ -54,8 +54,11 @@ export function AuthProvider({ children }) {
     const register = useCallback(async (email, password, username) => {
         setError(null);
         try {
+            // Normalize email to lowercase
+            const normalizedEmail = email.toLowerCase().trim();
+
             // Check if email already exists
-            const existingUser = await dbHelpers.getUserByEmail(email);
+            const existingUser = await dbHelpers.getUserByEmail(normalizedEmail);
             if (existingUser) {
                 throw new Error('Bu e-posta adresi zaten kayıtlı');
             }
@@ -65,7 +68,7 @@ export function AuthProvider({ children }) {
 
             // Create user
             const userId = await dbHelpers.createUser({
-                email,
+                email: normalizedEmail,
                 username,
                 passwordHash,
                 emailVerified: false,
@@ -104,7 +107,9 @@ export function AuthProvider({ children }) {
     const login = useCallback(async (email, password, rememberMe = false) => {
         setError(null);
         try {
-            const userData = await dbHelpers.getUserByEmail(email);
+            // Normalize email
+            const normalizedEmail = email.toLowerCase().trim();
+            const userData = await dbHelpers.getUserByEmail(normalizedEmail);
 
             if (!userData) {
                 throw new Error('Kullanıcı bulunamadı');
