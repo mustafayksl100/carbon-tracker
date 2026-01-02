@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import db, { dbHelpers } from '../db/database';
+import { encryptData, decryptData } from '../utils/encryption';
 
 const AuthContext = createContext(null);
 
@@ -33,9 +34,24 @@ export function AuthProvider({ children }) {
                 if (storedUserId) {
                     const userData = await dbHelpers.getUserById(parseInt(storedUserId));
                     if (userData) {
-                        setUser(userData);
+                        // Decrypt user data before setting state
+                        const decryptedUser = {
+                            ...userData,
+                            email: userData.email ? await decryptData(userData.email) : '',
+                            username: userData.username ? await decryptData(userData.username) : ''
+                        };
+                        setUser(decryptedUser);
+
                         const profileData = await dbHelpers.getProfileByUserId(userData.id);
-                        setProfile(profileData);
+                        if (profileData) {
+                            const decryptedProfile = {
+                                ...profileData,
+                                fullName: profileData.fullName ? await decryptData(profileData.fullName) : '',
+                                city: profileData.city ? await decryptData(profileData.city) : '',
+                                country: profileData.country ? await decryptData(profileData.country) : ''
+                            };
+                            setProfile(decryptedProfile);
+                        }
                     } else {
                         localStorage.removeItem('carbontrack_userId');
                     }
@@ -57,19 +73,26 @@ export function AuthProvider({ children }) {
             // Normalize email to lowercase
             const normalizedEmail = email.toLowerCase().trim();
 
-            // Check if email already exists
-            const existingUser = await dbHelpers.getUserByEmail(normalizedEmail);
-            if (existingUser) {
-                throw new Error('Bu e-posta adresi zaten kayıtlı');
+            // Encrypt email for lookup (we need to search by encrypted value)
+            const encryptedEmail = await encryptData(normalizedEmail);
+            const encryptedUsername = await encryptData(username);
+
+            // Check if email already exists (search all users)
+            const allUsers = await db.users.toArray();
+            for (const u of allUsers) {
+                const decryptedEmail = await decryptData(u.email);
+                if (decryptedEmail === normalizedEmail) {
+                    throw new Error('Bu e-posta adresi zaten kayıtlı');
+                }
             }
 
             // Hash password
             const passwordHash = await hashPassword(password);
 
-            // Create user
+            // Create user with encrypted data
             const userId = await dbHelpers.createUser({
-                email: normalizedEmail,
-                username,
+                email: encryptedEmail,
+                username: encryptedUsername,
                 passwordHash,
                 emailVerified: false,
                 verificationToken: uuidv4(),
@@ -78,8 +101,14 @@ export function AuthProvider({ children }) {
                 resetTokenExpiry: null
             });
 
-            // Get created user
+            // Get created user and decrypt for state
             const userData = await dbHelpers.getUserById(userId);
+            const decryptedUser = {
+                ...userData,
+                email: normalizedEmail,
+                username: username
+            };
+            setUser(decryptedUser);
 
             // Create empty profile
             await dbHelpers.createProfile({
@@ -92,8 +121,7 @@ export function AuthProvider({ children }) {
                 incomeLevel: 'medium'
             });
 
-            // Auto-login after registration
-            setUser(userData);
+            // Auto-login after registration - use decrypted user
             localStorage.setItem('carbontrack_userId', userId.toString());
 
             return { success: true, userId };
@@ -109,7 +137,18 @@ export function AuthProvider({ children }) {
         try {
             // Normalize email
             const normalizedEmail = email.toLowerCase().trim();
-            const userData = await dbHelpers.getUserByEmail(normalizedEmail);
+
+            // Search for user by decrypting all emails
+            const allUsers = await db.users.toArray();
+            let userData = null;
+
+            for (const u of allUsers) {
+                const decryptedEmail = await decryptData(u.email);
+                if (decryptedEmail === normalizedEmail) {
+                    userData = u;
+                    break;
+                }
+            }
 
             if (!userData) {
                 throw new Error('Kullanıcı bulunamadı');
@@ -121,9 +160,24 @@ export function AuthProvider({ children }) {
                 throw new Error('Şifre yanlış');
             }
 
-            setUser(userData);
+            // Decrypt user data for state
+            const decryptedUser = {
+                ...userData,
+                email: normalizedEmail,
+                username: await decryptData(userData.username)
+            };
+            setUser(decryptedUser);
+
             const profileData = await dbHelpers.getProfileByUserId(userData.id);
-            setProfile(profileData);
+            if (profileData) {
+                const decryptedProfile = {
+                    ...profileData,
+                    fullName: profileData.fullName ? await decryptData(profileData.fullName) : '',
+                    city: profileData.city ? await decryptData(profileData.city) : '',
+                    country: profileData.country ? await decryptData(profileData.country) : ''
+                };
+                setProfile(decryptedProfile);
+            }
 
             localStorage.setItem('carbontrack_userId', userData.id.toString());
 
@@ -212,9 +266,20 @@ export function AuthProvider({ children }) {
         try {
             if (!user) throw new Error('Oturum açmanız gerekiyor');
 
-            await dbHelpers.updateProfile(user.id, profileData);
+            // Encrypt sensitive fields
+            const encryptedData = { ...profileData };
+            if (profileData.fullName) encryptedData.fullName = await encryptData(profileData.fullName);
+            if (profileData.city) encryptedData.city = await encryptData(profileData.city);
+            if (profileData.country) encryptedData.country = await encryptData(profileData.country);
+
+            await dbHelpers.updateProfile(user.id, encryptedData);
+
+            // Update state with plaintext data
             const updatedProfile = await dbHelpers.getProfileByUserId(user.id);
-            setProfile(updatedProfile);
+            setProfile({
+                ...updatedProfile,
+                ...profileData // Keep plaintext values in state
+            });
 
             return { success: true };
         } catch (err) {
