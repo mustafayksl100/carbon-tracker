@@ -66,9 +66,31 @@ export async function encryptData(plainText) {
     }
 }
 
+// Check if a value looks like valid encrypted data (base64 with sufficient length)
+function looksEncrypted(value) {
+    if (!value || typeof value !== 'string') return false;
+    // Encrypted data should be at least 28 chars (12 byte IV + some data, base64 encoded)
+    if (value.length < 28) return false;
+    // Check for valid base64 characters
+    const base64Regex = /^[A-Za-z0-9+/]+=*$/;
+    if (!base64Regex.test(value)) return false;
+    try {
+        const decoded = atob(value);
+        // Should have at least 13 bytes (12 IV + 1 data)
+        return decoded.length >= 13;
+    } catch {
+        return false;
+    }
+}
+
 // Decrypt an encrypted string
 export async function decryptData(encryptedText) {
     if (!encryptedText || encryptedText === '') return '';
+
+    // If it doesn't look like encrypted data, return as-is
+    if (!looksEncrypted(encryptedText)) {
+        return encryptedText;
+    }
 
     try {
         const key = await getOrCreateEncryptionKey();
@@ -91,8 +113,8 @@ export async function decryptData(encryptedText) {
         const decoder = new TextDecoder();
         return decoder.decode(decrypted);
     } catch (error) {
-        console.error('Decryption error:', error);
-        return encryptedText; // Return as-is if decryption fails (might be unencrypted)
+        // Silently return original value - likely unencrypted legacy data
+        return encryptedText;
     }
 }
 

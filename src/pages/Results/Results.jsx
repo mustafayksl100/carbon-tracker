@@ -50,7 +50,8 @@ export default function Results() {
             digital: 'digitalFootprint',
             consumption: 'consumptionFootprint'
         };
-        return result[keyMap[key]] || 0;
+        // Ensure non-negative values (some options have negative carbonValue for offsets)
+        return Math.max(0, result[keyMap[key]] || 0);
     };
 
     const chartData = {
@@ -190,7 +191,8 @@ export default function Results() {
                         <div className="category-list">
                             {categories.map(cat => {
                                 const value = getCategoryValue(cat.key);
-                                const percentage = ((value / result.totalCarbonFootprint) * 100).toFixed(1);
+                                const safeTotal = Math.max(result.totalCarbonFootprint, 1); // Prevent division by zero
+                                const percentage = Math.max(0, ((value / safeTotal) * 100)).toFixed(1);
                                 return (
                                     <div key={cat.key} className="category-item">
                                         <div className="cat-header">

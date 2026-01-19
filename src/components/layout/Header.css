@@ -236,7 +236,12 @@
     }
 
     .profile-name {
-        display: none;
+        /* Show truncated name on mobile */
+        max-width: 60px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: var(--text-xs);
     }
 
     .mobile-menu-btn {

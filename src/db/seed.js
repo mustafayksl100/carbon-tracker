@@ -403,20 +403,27 @@ const questions = [
 ];
 
 // Seed function
+// Helper for dev-only logging
+const devLog = (...args) => {
+    if (import.meta.env.DEV) {
+        console.log(...args);
+    }
+};
+
 export async function seedDatabase() {
     try {
         // Check if already seeded
         const existingCategories = await db.questionCategories.count();
         if (existingCategories > 0) {
-            console.log('Database already seeded');
+            devLog('Database already seeded');
             return;
         }
 
-        console.log('Seeding database...');
+        devLog('Seeding database...');
 
         // Insert categories
         await db.questionCategories.bulkAdd(categories);
-        console.log('Categories seeded');
+        devLog('Categories seeded');
 
         // Insert questions and options
         for (const question of questions) {
@@ -434,8 +441,8 @@ export async function seedDatabase() {
             await db.questionOptions.bulkAdd(optionsWithQuestionId);
         }
 
-        console.log('Questions and options seeded');
-        console.log('Database seeding complete!');
+        devLog('Questions and options seeded');
+        devLog('Database seeding complete!');
     } catch (error) {
         console.error('Error seeding database:', error);
         throw error;

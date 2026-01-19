@@ -107,10 +107,15 @@ export default function Survey() {
             sessionId
         });
 
-        // Auto-advance after short delay
-        setTimeout(() => {
-            handleNext();
-        }, 300);
+        // Auto-advance after short delay (but not on the last question)
+        const isLastQuestion = currentCategoryIndex === categories.length - 1 &&
+            currentQuestionIndex === questions.length - 1;
+
+        if (!isLastQuestion) {
+            setTimeout(() => {
+                handleNext();
+            }, 300);
+        }
     };
 
     const handleNext = useCallback(() => {
